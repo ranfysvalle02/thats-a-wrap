@@ -1,5 +1,5 @@
 # thats-a-wrap
 
-![](dem01.png)
+![](dem01x.png)
 
 ---
