@@ -4,7 +4,9 @@
 
 ---
 
-# 🎄 Unwrapping GitHub Repositories: Crafting Visual Stories with AI 🎁
+# Unwrapping GitHub Repositories: 
+
+## 🎄 Crafting Visual Stories with AI 🎁
 
 As the holiday season approaches, it's a wonderful time to reflect on personal achievements and share them in creative ways. For developers, GitHub repositories are more than just code—they're a testament to one's journey, learning, and passion. But how can you present them in a way that's engaging and festive?
 
