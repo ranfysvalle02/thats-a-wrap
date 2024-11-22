@@ -4,7 +4,7 @@
 
 ---
 
-# Unwrapping GitHub Repositories: 
+# Unwrapping GitHub Repositories
 
 ## 🎄 Crafting Visual Stories with AI 🎁
 
