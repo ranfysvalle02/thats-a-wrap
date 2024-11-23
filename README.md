@@ -1,6 +1,6 @@
 # thats-a-wrap
 
-![](dem01x.png)
+![](d3m0.png)
 
 _inspired by https://github.com/ranfysvalle02/readme-profiler/_
 
