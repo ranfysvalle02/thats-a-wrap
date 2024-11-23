@@ -2,6 +2,8 @@
 
 ![](dem01x.png)
 
+_inspired by https://github.com/ranfysvalle02/readme-profiler/_
+
 ---
 
 # Unwrapping GitHub Repositories
