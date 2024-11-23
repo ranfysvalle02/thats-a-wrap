@@ -95,6 +95,312 @@ While "That's a Wrap" is themed around Christmas, the concept can be adapted for
 
 The possibilities are limited only by creativity, and the approach demonstrates how AI and web technologies can be combined to create impactful experiences.
 
+## Understanding the Script
+
+Let's break down the script into its core components to understand how each part contributes to the overall functionality.
+
+### Configuration and Setup
+
+```python
+import os
+import json
+from datetime import datetime, timedelta
+from github import Github
+from pymongo import MongoClient
+
+THEME = "CHRISTMAS 🎄"
+```
+
+- **Imports**: The script imports necessary modules for handling environment variables, JSON operations, date and time manipulations, GitHub API interactions, and MongoDB connections.
+- **THEME**: Sets the festive theme, which in this case is "CHRISTMAS 🎄".
+
+### Writing Output to File
+
+```python
+def write_to_file(content, base_filename='thats-a-wrap-'):
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')  # current date and time as a string
+    filename = f"{base_filename}_{timestamp}.html"
+    try:
+        with open(filename, 'w') as f:
+            f.write(content)
+    except Exception as e:
+        print(f"An error occurred while writing to the file: {str(e)}") 
+```
+
+- **Function**: `write_to_file` creates an HTML file with a timestamped filename to ensure uniqueness.
+- **Error Handling**: Catches and prints any exceptions that occur during the file writing process.
+
+### GitHub API Integration
+
+```python
+def get_github_instance():
+    token = os.getenv('GITHUB_TOKEN')
+    if token:
+        print("Authenticated with GitHub token.")
+        return Github(token)
+    else:
+        print("No GitHub token found. Using anonymous access.")
+        return Github()  # Anonymous access
+```
+
+- **Authentication**: Attempts to authenticate with GitHub using a personal access token. If not found, defaults to anonymous access, which has limited rate limits.
+
+### MongoDB Connection
+
+```python
+def get_mongo_client():
+    mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/?directConnection=true')
+    client = MongoClient(mongo_uri)
+    return client
+```
+
+- **Connection**: Connects to MongoDB using the URI provided in the environment variable `MONGO_URI`. Defaults to a local MongoDB instance if not specified.
+
+### Configuring Search Parameters
+
+```python
+def configure_search_parameters():
+    search_params = {
+        'username': 'ranfysvalle02',   # GitHub username to search
+        'language': 'Python',          # Primary language of repositories
+        'min_stars': 1,                # Minimum number of stars
+        'updated_within_months': 12    # Repositories updated within the last N months
+    }
+    return search_params
+```
+
+- **Customization**: Defines the criteria for selecting repositories:
+  - **Username**: The GitHub user whose repositories are being showcased.
+  - **Language**: Filters repositories based on the primary programming language.
+  - **Minimum Stars**: Ensures only repositories with a certain level of popularity are included.
+  - **Update Recency**: Includes repositories updated within the last specified number of months.
+
+### Fetching GitHub Repositories
+
+```python
+def search_repositories_pygithub(github_instance, search_params):
+    username = search_params['username']
+    try:
+        user = github_instance.get_user(username)
+    except Exception as e:
+        print(f"Error fetching user '{username}': {e}")
+        return []
+
+    public_repos = user.get_repos(type='public')
+
+    since_date = datetime.now() - timedelta(days=30 * search_params['updated_within_months'])
+
+    matching_repos = []
+
+    for repo in public_repos:
+        if repo.language != search_params['language']:
+            continue
+        if repo.stargazers_count < search_params['min_stars']:
+            continue
+        if repo.updated_at < since_date:
+            continue
+
+        matching_repos.append({
+            'name': repo.name,
+            'description': repo.description,
+            'stars': repo.stargazers_count,
+            'forks': repo.forks_count,
+            'language': repo.language,
+            'updated_at': repo.updated_at.strftime('%Y-%m-%d'),
+            'url': repo.html_url,
+            'username': username
+        })
+
+    return matching_repos
+```
+
+- **User Retrieval**: Fetches the specified GitHub user's public repositories.
+- **Filtering**: Applies the defined search parameters to filter repositories.
+- **Data Extraction**: Gathers relevant information from each qualifying repository.
+
+### Storing Data with MongoDB
+
+```python
+def main():
+    github_instance = get_github_instance()
+    search_params = configure_search_parameters()
+    mongo_client = get_mongo_client()
+    db = mongo_client['sample_training']
+    repo_collection = db['github']
+
+    # Check if indexes exist before creating them
+    if 'language_1' not in repo_collection.index_information():
+        repo_collection.create_index([('language', 1)])
+    if 'stars_-1' not in repo_collection.index_information():
+        repo_collection.create_index([('stars', -1)])
+
+    matching_repos = search_repositories_pygithub(github_instance, search_params)
+
+    for repo in matching_repos:
+        # Use a combination of 'name' and 'username' to uniquely identify repositories
+        repo_collection.update_one(
+            {'name': repo['name'], 'username': repo['username']},
+            {'$set': repo},
+            upsert=True
+        )
+```
+
+- **Database Setup**: Connects to the MongoDB database and ensures necessary indexes are in place for efficient querying.
+- **Data Insertion**: Inserts or updates repository data in the MongoDB collection to maintain the latest information.
+
+### Generating Festive Descriptions
+
+```python
+def generate_festive_description(repo, username):
+    from openai import AzureOpenAI
+    client = AzureOpenAI(
+        api_key="",  
+        api_version="2024-10-21",
+        azure_endpoint="https://.openai.azure.com"
+    )
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "user", "content": f"""
+Given the following repository data:
+
+Name: {repo['name']}
+Description: {repo['description'] or 'No description provided.'}
+Stars: {repo['stars']}
+Forks: {repo['forks']}
+Language: {repo['language']}
+Updated At: {repo['updated_at']}
+URL: {repo['url']}
+
+Generate an engaging description for the repository, focusing on the following points:
+- What makes it unique?
+- What's special about it?
+- THEME: {THEME}
+
+The description should be written in a friendly and engaging manner, with a maximum of 15 words.
+
+IMPORTANT!
+- DO NOT INCLUDE LINKS IN THE DESCRIPTION.
+- DO NOT INCLUDE THE REPOSITORY NAME IN THE DESCRIPTION.
+- MAXIMUM LENGTH IS 15 WORDS.
+- USE EMOJIS IN THE DESCRIPTION STRATEGICALLY TO CREATE A FESTIVE ENVIRONMENT.
+- THEME: {THEME}
+""" },
+        ]
+    )
+    festive_description = response.choices[0].message.content.strip()
+    return festive_description
+```
+
+- **OpenAI Integration**: Utilizes OpenAI's language models via Azure to generate concise, festive descriptions for each repository.
+- **Customization**: Ensures the descriptions are themed appropriately (e.g., Christmas), include emojis, and adhere to length constraints.
+- **Best Practices**: Enforces guidelines to maintain consistency and avoid redundancy.
+
+### Creating the Festive HTML Output
+
+```python
+    top_repos = list(repo_collection.aggregate([
+        {'$match': {'language': search_params['language']}},
+        {'$sort': {'stars': -1}},
+        {'$limit': 6}
+    ]))
+
+    for repo in top_repos:
+        if 'festive_description' not in repo:
+            festive_description = generate_festive_description(repo, search_params['username'])
+            repo_collection.update_one(
+                {'_id': repo['_id']},
+                {'$set': {'festive_description': festive_description}}
+            )
+            repo['festive_description'] = festive_description
+
+    giftsData = []
+    for idx, repo in enumerate(top_repos, 1):
+        giftsData.append({
+            'repoNumber': idx,
+            'name': repo['name'],
+            'description': repo['festive_description'],
+            'imageUrl': f"https://github.com/{search_params['username']}.png",
+            'repoUrl': repo['url']
+        })
+
+    with open('githubber.html', 'r') as file:
+        html_raw = file.read()
+
+    html = html_raw.replace('___GIFTS_DATA___', json.dumps(giftsData))
+
+    write_to_file(html)
+```
+
+- **Aggregation**: Selects the top 6 repositories based on star count within the specified language.
+- **Description Generation**: For each top repository lacking a festive description, the script generates one and updates the database.
+- **Data Preparation**: Compiles the repository data into a `giftsData` list, including repository details and the user's GitHub avatar.
+- **HTML Generation**: Reads a template HTML file (`githubber.html`), injects the `giftsData` JSON, and writes the final HTML output using the `write_to_file` function.
+
+---
+
+## Running the Script
+
+To execute the script:
+
+1. **Set Environment Variables**:
+   - `GITHUB_TOKEN`: Your GitHub personal access token.
+   - `MONGO_URI`: (Optional) Your MongoDB connection string. Defaults to `mongodb://localhost:27017/?directConnection=true` if not set.
+   
+   Example (Linux/Mac):
+   ```bash
+   export GITHUB_TOKEN='your_github_token_here'
+   export MONGO_URI='your_mongodb_uri_here'
+   ```
+
+2. **Configure the Script**:
+   - Update the `configure_search_parameters` function with your GitHub username or desired search criteria.
+   - Ensure the `generate_festive_description` function is correctly configured with your OpenAI Azure credentials.
+
+3. **Prepare the HTML Template**:
+   - Create a `githubber.html` file with a placeholder `___GIFTS_DATA___` where the repository data should be injected.
+   
+   Example `githubber.html`:
+   ```html
+   <!DOCTYPE html>
+   <html lang="en">
+   <head>
+       <meta charset="UTF-8">
+       <title>Festive GitHub Repositories</title>
+       <style>
+           /* Add your CSS styling here */
+       </style>
+   </head>
+   <body>
+       <h1>Top GitHub Repositories 🎄</h1>
+       <ul id="repos">
+           <!-- Repository data will be injected here -->
+           ___GIFTS_DATA___
+       </ul>
+       <script>
+           const giftsData = ___GIFTS_DATA___;
+           const repoList = document.getElementById('repos');
+           giftsData.forEach(repo => {
+               const listItem = document.createElement('li');
+               listItem.innerHTML = `
+                   <h2>${repo.repoNumber}. <a href="${repo.repoUrl}">${repo.name}</a></h2>
+                   <p>${repo.description}</p>
+                   <img src="${repo.imageUrl}" alt="User Avatar" width="50">
+               `;
+               repoList.appendChild(listItem);
+           });
+       </script>
+   </body>
+   </html>
+   ```
+
+4. **Execute the Script**:
+   ```bash
+   python demo.py
+   ```
+
+Upon execution, the script will generate an HTML file with a festive showcase of your top GitHub repositories, complete with holiday-themed descriptions and visuals.
+
 ## Conclusion
 
 "That's a Wrap" is more than a festive project—it's an exploration of how AI can enrich the way we share and perceive information. By turning repositories into a visual story, it's possible to engage audiences in new ways and showcase work beyond traditional formats.
