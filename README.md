@@ -72,7 +72,7 @@ The sophistication of the generated descriptions and the creativity infused into
 
 The real magic happens when synthesizing raw repository data into compelling stories. By leveraging AI, it's possible to transform technical information into narratives that resonate on a personal level.
 
-![](wrap0.png)
+![](wrap1.png)
 
 ### Example of Transformation
 
